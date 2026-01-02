@@ -1,0 +1,38 @@
+# Pipeline configuration
+# Override default hardcoded paths and parameters.
+
+base_path: "c:/Users/anis/Desktop/DATA"
+paths:
+  climate_dir: CLIMATE
+  elevation_dir: ELEVATION/be15_grd/be15_grd
+  landcover_dir: LANDCOVER
+  soil_dir: SOIL
+  fire_dir: FIRE
+  aoi_shapefile: shapefiles/algeria_tunisia.shp
+
+output_subdirs:
+  climate_processed: CLIMATE/processed
+  elevation_processed: ELEVATION/be15_grd/processed
+  landcover_processed: LANDCOVER/processed
+  soil_processed: SOIL/processed
+  metadata_root: processed/_metadata
+
+cleaning:
+  max_fill_pct: 5.0
+  use_smart_imputation: true  # Smart outlier replacement: mean (symmetric), median (asymmetric), mode (categorical), spatial mean (geospatial)
+  climate_outlier_method: iqr
+  elevation_outlier_method: iqr
+  landcover_outlier_method: none
+  soil_numeric_fill_pct: 5.0
+
+fire:
+  frp_outlier_method: iqr
+  max_overlay_points: 25000
+
+metadata:
+  stac_version: 1.0.0
+  license: CC-BY-4.0
+
+log:
+  level: INFO
+  format: "%(asctime)s %(levelname)s [%(name)s] %(message)s"

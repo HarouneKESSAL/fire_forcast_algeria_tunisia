@@ -1,0 +1,54 @@
+# Algeria-Tunisia Fire Risk Project
+# Python Dependencies
+
+# Core data processing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Geospatial
+geopandas>=0.13.0
+rasterio>=1.3.0
+xarray>=2023.1.0
+rioxarray>=0.14.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.5.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+folium>=0.14.0
+
+# Dashboard
+streamlit>=1.22.0
+streamlit-folium>=0.12.0
+
+# Machine Learning (future)
+scikit-learn>=1.2.0
+# xgboost>=1.7.0
+# lightgbm>=3.3.0
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+joblib>=1.2.0
+
+# Database
+pyodbc>=4.0.0  # For HWSD2.mdb access
+
+# Jupyter
+jupyter>=1.0.0
+ipykernel>=6.22.0
+ipywidgets>=8.0.0
+
+# Testing
+pytest>=7.3.0
+pytest-cov>=4.0.0
+
+# Code quality
+black>=23.3.0
+isort>=5.12.0
+flake8>=6.0.0

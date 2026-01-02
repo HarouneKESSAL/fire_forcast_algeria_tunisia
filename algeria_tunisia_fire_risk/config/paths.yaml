@@ -1,0 +1,36 @@
+# Data Paths Configuration
+# Algeria-Tunisia Fire Risk Project
+
+# Raw data paths
+raw_data:
+  climate: data/raw/CLIMATE
+  elevation: data/raw/ELEVATION
+  fire: data/raw/FIRE
+  landcover: data/raw/LANDCOVER
+  soil: data/raw/SOIL
+  shapefiles: data/raw/shapefiles
+
+# Processed data paths
+processed_data:
+  root: data/processed
+  climate: data/processed/CLIMATE
+  elevation: data/processed/ELEVATION
+  fire: data/processed/FIRE
+  landcover: data/processed/LANDCOVER
+  soil: data/processed/SOIL
+  cleaned: data/processed/DATA_CLEANED
+
+# Final integrated dataset
+final_data:
+  root: data/final
+  merged_dataset: data/final/fire_risk_dataset.parquet
+
+# Output paths
+outputs:
+  figures: outputs/figures
+  reports: outputs/reports
+  models: outputs/models
+
+# Shapefile for study area
+study_area:
+  shapefile: data/raw/shapefiles/algeria_tunisia.shp

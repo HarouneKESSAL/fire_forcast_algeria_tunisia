@@ -1,0 +1,60 @@
+# Processing Parameters Configuration
+# Algeria-Tunisia Fire Risk Project
+
+# Climate data parameters
+climate:
+  variables:
+    - tmin
+    - tmax
+    - prec
+  resolution: 5m  # 5 arc-minutes
+  time_period: 2020-2024
+  source: worldclim_cru
+
+# Elevation data parameters
+elevation:
+  source: be15_grd
+  resolution: 15_arc_seconds
+  unit: meters
+
+# Fire data parameters
+fire:
+  source: viirs-jpss1
+  year: 2024
+  countries:
+    - Algeria
+    - Tunisia
+  confidence_threshold: 0.8
+
+# Landcover data parameters
+landcover:
+  source: geonetwork
+  classification: gc_adg
+  countries:
+    - DZA
+    - TUN
+
+# Soil data parameters
+soil:
+  source: HWSD2
+  version: 2
+  layers:
+    - all
+  attributes:
+    - texture
+    - organic_carbon
+    - ph
+    - bulk_density
+
+# Processing parameters
+processing:
+  crs: EPSG:4326
+  no_data_value: -9999
+  fill_method: nearest
+  chunk_size: 1024
+
+# Model parameters (future)
+model:
+  test_size: 0.2
+  random_state: 42
+  cross_validation_folds: 5
