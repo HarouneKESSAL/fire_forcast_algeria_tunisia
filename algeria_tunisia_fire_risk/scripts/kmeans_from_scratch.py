@@ -10,13 +10,13 @@ K-Means clustering from scratch (Lloyd's algorithm).
 
 Usage (PowerShell):
 
-  python scripts/kmeans_from_scratch.py \
+  python scripts/model_training/kmeans_from_scratch.py \
     --data f:/DATA/DATA_CLEANED/processed/engineered_features_tomek_enn_balanced.csv \
     --target fire --features-top 20 --k-grid 2,3,4,5,6 --seed 42
 
 Or single k:
 
-  python scripts/kmeans_from_scratch.py --k 2 --seed 42
+  python scripts/model_training/kmeans_from_scratch.py --k 2 --seed 42
 
 """
 from __future__ import annotations

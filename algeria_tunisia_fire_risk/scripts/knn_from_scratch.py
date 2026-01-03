@@ -10,13 +10,13 @@ KNN (k-Nearest Neighbors) from scratch for classification.
 
 Usage (PowerShell):
 
-  python scripts/knn_from_scratch.py \
+  python scripts/model_training/knn_from_scratch.py \
     --data f:/DATA/DATA_CLEANED/processed/engineered_features_tomek_enn_balanced.csv \
     --target fire --features-top 20 --metric manhattan --k 11 --test-size 0.2 --seed 42
 
 Or sweep k values:
 
-  python scripts/knn_from_scratch.py --k-grid 3,5,7,9,11,15
+  python scripts/model_training/knn_from_scratch.py --k-grid 3,5,7,9,11,15
 
 """
 from __future__ import annotations

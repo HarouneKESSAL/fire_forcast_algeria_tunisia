@@ -9,7 +9,7 @@ Random Forest classifier from scratch with threshold tuning and CV.
 
 Usage (PowerShell):
 
-  python scripts/random_forest_from_scratch.py \
+  python scripts/model_training/random_forest_from_scratch.py \
     --data f:/DATA/DATA_CLEANED/processed/engineered_features_tomek_enn_balanced.csv \
     --n-trees 100 --max-depth 15 --min-samples-leaf 5 \
     --clean-data --optimize f1 \
@@ -18,7 +18,7 @@ Usage (PowerShell):
 
 Or with defaults:
 
-  python scripts/random_forest_from_scratch.py
+  python scripts/model_training/random_forest_from_scratch.py
 
 """
 from __future__ import annotations

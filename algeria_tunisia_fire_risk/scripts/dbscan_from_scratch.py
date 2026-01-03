@@ -11,20 +11,20 @@ DBSCAN clustering from scratch (density-based spatial clustering, optimized).
 
 Usage (PowerShell):
 
-  python scripts/dbscan_from_scratch.py \
+  python scripts/model_training/dbscan_from_scratch.py \
     --eps-grid 0.5,0.8,1.0,1.5,2.0 --min-samples-grid 5,10,15,20 \
     --save-labels f:/DATA/results/unsupervised/dbscan_labels.csv \
     --save-summary f:/DATA/results/unsupervised/dbscan_summary.json
 
 Or single eps/min_samples:
 
-  python scripts/dbscan_from_scratch.py --eps 2.0 --min-samples 20 \
+  python scripts/model_training/dbscan_from_scratch.py --eps 2.0 --min-samples 20 \
     --save-labels f:/DATA/results/unsupervised/dbscan_labels.csv \
     --save-summary f:/DATA/results/unsupervised/dbscan_summary.json
 
 Skip saving:
 
-  python scripts/dbscan_from_scratch.py --no-save
+  python scripts/model_training/dbscan_from_scratch.py --no-save
 
 """
 from __future__ import annotations
