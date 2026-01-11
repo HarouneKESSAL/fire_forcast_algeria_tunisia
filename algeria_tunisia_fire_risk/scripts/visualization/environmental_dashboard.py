@@ -30,6 +30,7 @@ import pandas as pd
 import xarray as xr
 import geopandas as gpd
 import rioxarray as rxr
+from shapely.geometry import box
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -55,23 +56,23 @@ import importlib
 # ==========================
 # CONFIG — adjust if needed
 # ==========================
-BASE = "/run/media/swift/MISO_EFI/DATA"
-SHAPE_PATH = os.path.join(BASE, "shapefiles/algeria_tunisia.shp")
+BASE = "/Volumes/MISO_EFI/DATA/algeria_tunisia_fire_risk/data"
+SHAPE_PATH = os.path.join(BASE, "raw/shapefiles/algeria_tunisia.shp")
 
-SOIL_RASTERS_ROOT = os.path.join(BASE, "SOIL/processed")           # processed soil rasters live here
-SOIL_ORIG_FALLBACK = os.path.join(BASE, "SOIL/HWSD2_RASTER")       # original soil rasters (fallback)
+SOIL_RASTERS_ROOT = os.path.join(BASE, "raw/SOIL/processed")           # processed soil rasters live here
+SOIL_ORIG_FALLBACK = os.path.join(BASE, "raw/SOIL/HWSD2_RASTER")       # original soil rasters (fallback)
 
-CLIMATE_DIR = os.path.join(BASE, "CLIMATE")
+CLIMATE_DIR = os.path.join(BASE, "raw/CLIMATE")
 CLIMATE_PROCESSED = os.path.join(CLIMATE_DIR, "processed")
 
-ELEV_DIR = os.path.join(BASE, "ELEVATION/be15_grd/be15_grd")
+ELEV_DIR = os.path.join(BASE, "raw/ELEVATION/be15_grd/be15_grd")
 ELEV_PROCESSED = os.path.join(ELEV_DIR, "processed")
-ELEV_TMP = "/run/media/swift/MISO_EFI/DATA/ELEVATION/be15_grd/processed/elevation_tmp.tif"
+ELEV_TMP = "/run/media/swift/MISO_EFI/DATA/algeria_tunisia_fire_risk/data/raw/ELEVATION/be15_grd/processed/elevation_tmp.tif"
 
-LANDCOVER_DIR = os.path.join(BASE, "LANDCOVER")
+LANDCOVER_DIR = os.path.join(BASE, "raw/LANDCOVER")
 LANDCOVER_PROC = os.path.join(LANDCOVER_DIR, "processed")
 
-FIRE_DIR = os.path.join(BASE, "FIRE")
+FIRE_DIR = os.path.join(BASE, "raw/FIRE")
 
 META_ROOT = os.path.join(BASE, "processed/_metadata")
 
@@ -232,6 +233,9 @@ def load_aoi():
         gp = importlib.import_module("geo_pipeline")
         return gp.load_aoi()
     except Exception:
+        if not os.path.exists(SHAPE_PATH):
+            st.error(f"Shapefile not found at: {SHAPE_PATH}. Please check the path in config.")
+            st.stop()
         return gpd.read_file(SHAPE_PATH).to_crs("EPSG:4326")
 
 AOI = load_aoi()
@@ -1275,7 +1279,7 @@ def _preview_raster(raster_path: str, title: str, categorical: bool = False) -> 
         buf = io.BytesIO()
         # Remove tight_layout call - using constrained_layout=True instead
         fig.savefig(buf, format="png", dpi=140, bbox_inches="tight")
-        st.image(buf.getvalue(), caption=plot_title, use_container_width=True)
+        st.image(buf.getvalue(), caption=plot_title)
         plt.close(fig)
     except Exception as e:
         feature_name, _ = get_feature_name(raster_path)
@@ -1534,7 +1538,11 @@ if page == "Soil":
             unit_metrics = ['mean', 'std', 'min', 'max', 'median', 'q25', 'q75', 'iqr']
             for metric in unit_metrics:
                 if metric in stats_df.index:
-                    stats_df.loc[metric, 'Value'] = f"{float(stats_df.loc[metric, 'Value']):.4f} {unit}"
+                    val = float(stats_df.loc[metric, 'Value'])
+                    stats_df.loc[metric, 'Value'] = f"{val:.4f} {unit}".strip()
+            
+            # Ensure Value column is string to avoid Arrow serialization errors
+            stats_df['Value'] = stats_df['Value'].astype(str)
             st.dataframe(stats_df)
         else:
             st.error(f"Error calculating statistics: {soil_stats.get('error')}")
@@ -2134,9 +2142,15 @@ elif page == "Land Cover":
     st.header("🌿 Land Cover — Vector/Shapefile Visualization")
     
     # Create tabs for different views
-    tab1, tab2, tab3 = st.tabs(["🗺️ Map Visualization", "📊 Statistics & Analysis", "ℹ️ Metadata & Cleaning"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🗺️ Map Visualization", 
+        "📊 Statistics & Analysis", 
+        "🌍 Spatial Distribution", 
+        "ℹ️ Metadata & Cleaning"
+    ])
     
     with tab1:
+        # [Previous tab1 code remains exactly the same]
         # Find available vector files
         vector_files = []
         raster_files = []
@@ -2431,6 +2445,7 @@ elif page == "Land Cover":
                               fallback_src_folder=LANDCOVER_DIR, categorical=True)
     
     with tab2:
+        # [Previous tab2 code remains exactly the same]
         if 'feature_name' in locals():
             st.header(f"📊 {feature_name} Statistics & Analysis")
         else:
@@ -2467,9 +2482,22 @@ elif page == "Land Cover":
             st.subheader("Area Statistics")
             
             try:
-                if valid_gdf.crs and valid_gdf.crs.is_projected:
+                # Handle projection for area calculation
+                valid_gdf_proj = valid_gdf.copy()
+                is_projected = valid_gdf.crs and valid_gdf.crs.is_projected
+                
+                if not is_projected:
+                    try:
+                        utm_crs = valid_gdf.estimate_utm_crs()
+                        valid_gdf_proj = valid_gdf_proj.to_crs(utm_crs)
+                        st.info(f"Data reprojected to {utm_crs.name} for area stats.")
+                        is_projected = True
+                    except:
+                        pass
+
+                if is_projected:
                     # Calculate area
-                    valid_gdf_copy = valid_gdf.copy()
+                    valid_gdf_copy = valid_gdf_proj.copy()
                     valid_gdf_copy['area_sqkm'] = valid_gdf_copy.geometry.area / 1e6
                     
                     area_stats = valid_gdf_copy.groupby(class_col).agg({
@@ -2577,16 +2605,23 @@ elif page == "Land Cover":
             
             with spatial_tab1:
                 try:
+                    # Use projected data if available/possible
+                    valid_gdf_geom = valid_gdf.copy()
+                    if not (valid_gdf.crs and valid_gdf.crs.is_projected):
+                        try:
+                            valid_gdf_geom = valid_gdf_geom.to_crs(valid_gdf.estimate_utm_crs())
+                        except:
+                            pass
+                    
                     # Calculate geometric properties
-                    valid_gdf_copy = valid_gdf.copy()
-                    valid_gdf_copy['area'] = valid_gdf_copy.geometry.area
-                    valid_gdf_copy['perimeter'] = valid_gdf_copy.geometry.length
+                    valid_gdf_geom['area'] = valid_gdf_geom.geometry.area
+                    valid_gdf_geom['perimeter'] = valid_gdf_geom.geometry.length
                     
                     # Calculate compactness (4π * area / perimeter²)
-                    valid_gdf_copy['compactness'] = 4 * np.pi * valid_gdf_copy['area'] / (valid_gdf_copy['perimeter'] ** 2)
+                    valid_gdf_geom['compactness'] = 4 * np.pi * valid_gdf_geom['area'] / (valid_gdf_geom['perimeter'] ** 2)
                     
                     # Group statistics
-                    geom_stats = valid_gdf_copy.groupby(class_col).agg({
+                    geom_stats = valid_gdf_geom.groupby(class_col).agg({
                         'area': ['mean', 'std', 'min', 'max'],
                         'compactness': ['mean', 'std']
                     }).round(4)
@@ -2617,6 +2652,350 @@ elif page == "Land Cover":
             st.info("Load data in the 'Map Visualization' tab first to see statistics.")
     
     with tab3:
+        # ============================================
+        # NEW: SPATIAL DISTRIBUTION OF MAJOR LAND COVER CLASSES
+        # ============================================
+        if 'gdf' in locals() and 'class_col' in locals() and class_col and 'valid_gdf' in locals():
+            st.header("🌍 Spatial Distribution of Major Land Cover Classes")
+            
+            # Filter to major classes (by area or count)
+            st.markdown("This visualization shows the geographical distribution of major land cover classes across Algeria and Tunisia.")
+            
+            # Handle projection for area calculation and visualization
+            valid_gdf_viz = valid_gdf.copy()
+            is_projected = valid_gdf.crs and valid_gdf.crs.is_projected
+            
+            if not is_projected:
+                try:
+                    utm_crs = valid_gdf.estimate_utm_crs()
+                    valid_gdf_viz = valid_gdf_viz.to_crs(utm_crs)
+                    st.info(f"Data reprojected to {utm_crs.name} for spatial analysis.")
+                    is_projected = True
+                except:
+                    pass
+
+            if is_projected:
+                valid_gdf_copy = valid_gdf_viz.copy()
+                valid_gdf_copy['area_sqkm'] = valid_gdf_copy.geometry.area / 1e6
+                
+                # Aggregate by class
+                class_areas = valid_gdf_copy.groupby(class_col)['area_sqkm'].sum().reset_index()
+                class_areas['Code'] = class_areas[class_col].astype(int)
+                class_areas['Class_Name'] = class_areas['Code'].apply(
+                    lambda x: LCCS_NAMES.get(x, f"Class {x}")
+                )
+                class_areas = class_areas.sort_values('area_sqkm', ascending=False)
+                
+                # Let user select number of major classes to display
+                max_classes = min(20, len(class_areas))
+                n_classes = st.slider(
+                    "Number of major classes to visualize:", 
+                    min_value=3, 
+                    max_value=max_classes, 
+                    value=min(8, max_classes),
+                    help="Select how many major land cover classes to display on the map"
+                )
+                
+                # Get top classes
+                top_classes = class_areas.head(n_classes)
+                
+                # Create spatial distribution plot
+                st.subheader(f"Distribution of Top {n_classes} Land Cover Classes")
+                
+                # Create a figure with multiple subplots
+                n_rows = (n_classes + 3) // 4  # 4 columns, adjust rows accordingly
+                fig, axes = plt.subplots(n_rows, 4, figsize=(20, 5 * n_rows))
+                axes = axes.flatten() if n_rows > 1 else [axes]
+                
+                # Define consistent color scheme for all classes
+                base_cmap = matplotlib.colormaps.get_cmap('tab20')
+                
+                for idx, (_, row) in enumerate(top_classes.iterrows()):
+                    if idx >= len(axes):
+                        break
+                    
+                    code = row['Code']
+                    class_name = row['Class_Name']
+                    area = row['area_sqkm']
+                    
+                    # Filter data for this class
+                    class_data = valid_gdf_viz[valid_gdf_viz[class_col] == code]
+                    
+                    # Get color from base colormap
+                    color_idx = idx % 20
+                    class_color = base_cmap(color_idx)
+                    
+                    # Plot individual class
+                    ax = axes[idx]
+                    class_data.plot(ax=ax, color=class_color, alpha=0.7, linewidth=0.3, edgecolor='black')
+                    
+                    # Add AOI boundary
+                    try:
+                        aoi_reproj = AOI.to_crs(valid_gdf_viz.crs)
+                        aoi_reproj.boundary.plot(ax=ax, color='red', linewidth=0.8, linestyle='--')
+                    except:
+                        pass
+                    
+                    # Set title with area information
+                    short_name = class_name[:25] + '...' if len(class_name) > 25 else class_name
+                    ax.set_title(f"{code}: {short_name}\nArea: {area:,.0f} km²", 
+                                fontsize=10, fontweight='bold')
+                    ax.set_axis_off()
+                    
+                    # Add north arrow
+                    ax.text(0.02, 0.98, 'N', transform=ax.transAxes, 
+                           fontsize=8, fontweight='bold', 
+                           verticalalignment='top',
+                           bbox=dict(boxstyle="circle,pad=0.3", facecolor="white", alpha=0.7))
+                
+                # Hide unused subplots
+                for idx in range(len(top_classes), len(axes)):
+                    axes[idx].set_visible(False)
+                
+                plt.suptitle(f"Spatial Distribution of Major Land Cover Classes in Algeria and Tunisia", 
+                           fontsize=16, fontweight='bold', y=0.98)
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig)
+                
+                # Create a combined distribution map
+                st.subheader("🌍 Combined Map of Major Land Cover Classes")
+                
+                fig_combined, ax_combined = plt.subplots(figsize=(14, 10))
+                
+                # Plot all top classes together
+                for idx, (_, row) in enumerate(top_classes.iterrows()):
+                    code = row['Code']
+                    class_data = valid_gdf_viz[valid_gdf_viz[class_col] == code]
+                    color_idx = idx % 20
+                    class_color = base_cmap(color_idx)
+                    
+                    class_data.plot(ax=ax_combined, color=class_color, alpha=0.7, 
+                                   linewidth=0.2, edgecolor='black', label=f"{code}: {row['Class_Name'][:30]}")
+                
+                # Add AOI boundary
+                try:
+                    aoi_reproj = AOI.to_crs(valid_gdf_viz.crs)
+                    aoi_reproj.boundary.plot(ax=ax_combined, color='black', linewidth=2, linestyle='-', 
+                                           label="Country Boundaries")
+                except:
+                    pass
+                
+                # Add country labels if available in AOI
+                if 'name' in AOI.columns:
+                    for _, row in AOI.iterrows():
+                        try:
+                            centroid = row.geometry.centroid
+                            ax_combined.annotate(row['name'], 
+                                               xy=(centroid.x, centroid.y),
+                                               xytext=(3, 3), 
+                                               textcoords="offset points",
+                                               fontsize=10, 
+                                               fontweight='bold',
+                                               bbox=dict(boxstyle="round,pad=0.3", 
+                                                        facecolor="white", alpha=0.7))
+                        except:
+                            pass
+                
+                ax_combined.set_title("Combined Distribution of Major Land Cover Classes", 
+                                    fontsize=16, fontweight='bold')
+                ax_combined.set_xlabel("Longitude")
+                ax_combined.set_ylabel("Latitude")
+                
+                # Add legend (outside plot)
+                ax_combined.legend(bbox_to_anchor=(1.05, 1), loc='upper left', 
+                                 fontsize=9, framealpha=0.9, title="Land Cover Classes")
+                
+                # Add scale bar and north arrow
+                ax_combined.text(0.02, 0.02, 'N', transform=ax_combined.transAxes, 
+                               fontsize=12, fontweight='bold', 
+                               bbox=dict(boxstyle="circle,pad=0.3", facecolor="white", alpha=0.7))
+                
+                plt.tight_layout()
+                st.pyplot(fig_combined)
+                plt.close(fig_combined)
+                
+                # Create a choropleth-style map (area-based)
+                st.subheader("📊 Choropleth Map: Land Cover Dominance")
+                
+                # Calculate percentage of each class in grid cells
+                try:
+                    # Create a grid over the AOI
+                    minx, miny, maxx, maxy = AOI.total_bounds
+                    grid_size = 0.5  # degrees (adjust based on your data)
+                    
+                    # Create grid polygons
+                    x_coords = np.arange(minx, maxx, grid_size)
+                    y_coords = np.arange(miny, maxy, grid_size)
+                    
+                    grid_cells = []
+                    for x in x_coords:
+                        for y in y_coords:
+                            grid_cells.append({
+                                'geometry': box(x, y, x + grid_size, y + grid_size)
+                            })
+                    
+                    grid_gdf = gpd.GeoDataFrame(grid_cells, crs="EPSG:4326")
+                    grid_gdf = grid_gdf.to_crs(valid_gdf_viz.crs)
+                    
+                    # Intersect with land cover data
+                    grid_classes = []
+                    for _, grid_cell in grid_gdf.iterrows():
+                        # Find land cover polygons that intersect this cell
+                        intersecting = valid_gdf_viz[valid_gdf_viz.intersects(grid_cell.geometry)]
+                        if not intersecting.empty:
+                            # Find dominant class in this cell
+                            dominant = intersecting[class_col].value_counts().index[0]
+                            grid_classes.append({
+                                'geometry': grid_cell.geometry,
+                                'dominant_class': int(dominant),
+                                'class_name': LCCS_NAMES.get(int(dominant), f"Class {int(dominant)}"),
+                                'n_classes': len(intersecting[class_col].unique())
+                            })
+                    
+                    if grid_classes:
+                        grid_result = gpd.GeoDataFrame(grid_classes, crs=valid_gdf_viz.crs)
+                        
+                        # Create choropleth map
+                        fig_choro, ax_choro = plt.subplots(figsize=(14, 10))
+                        
+                        # Get unique dominant classes
+                        unique_dominant = sorted(grid_result['dominant_class'].unique())
+                        
+                        # Create color mapping for choropleth
+                        choro_cmap = matplotlib.colormaps.get_cmap('tab20')
+                        dominant_colors = {}
+                        for i, code in enumerate(unique_dominant):
+                            dominant_colors[code] = choro_cmap(i % 20)
+                        
+                        # Plot each dominant class
+                        for code in unique_dominant:
+                            subset = grid_result[grid_result['dominant_class'] == code]
+                            color = dominant_colors[code]
+                            class_name = LCCS_NAMES.get(code, f"Class {code}")
+                            
+                            subset.plot(ax=ax_choro, color=color, alpha=0.7, 
+                                      edgecolor='black', linewidth=0.3,
+                                      label=f"{code}: {class_name[:20]}")
+                        
+                        # Add AOI boundary
+                        aoi_reproj = AOI.to_crs(valid_gdf_viz.crs)
+                        aoi_reproj.boundary.plot(ax=ax_choro, color='black', linewidth=2)
+                        
+                        ax_choro.set_title("Land Cover Dominance Map (Grid-based)", 
+                                         fontsize=16, fontweight='bold')
+                        ax_choro.set_xlabel("Easting")
+                        ax_choro.set_ylabel("Northing")
+                        
+                        # Add legend
+                        ax_choro.legend(bbox_to_anchor=(1.05, 1), loc='upper left', 
+                                      fontsize=8, title="Dominant Land Cover Classes")
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig_choro)
+                        plt.close(fig_choro)
+                        
+                        # Display grid statistics
+                        st.markdown("**Grid-based Dominance Statistics:**")
+                        dominance_stats = grid_result['dominant_class'].value_counts().reset_index()
+                        dominance_stats.columns = ['Code', 'Grid_Cells_Count']
+                        dominance_stats['Code'] = dominance_stats['Code'].astype(int)
+                        dominance_stats['Class_Name'] = dominance_stats['Code'].apply(
+                            lambda x: LCCS_NAMES.get(x, f"Class {x}")
+                        )
+                        dominance_stats['Percentage'] = (dominance_stats['Grid_Cells_Count'] / 
+                                                        len(grid_result) * 100).round(1)
+                        dominance_stats = dominance_stats.sort_values('Grid_Cells_Count', ascending=False)
+                        
+                        st.dataframe(dominance_stats)
+                        
+                except Exception as e:
+                    st.warning(f"Could not create choropleth map: {e}")
+                
+                # Summary statistics
+                st.subheader("📈 Summary Statistics")
+                
+                summary_col1, summary_col2, summary_col3 = st.columns(3)
+                
+                with summary_col1:
+                    total_area = class_areas['area_sqkm'].sum()
+                    st.metric("Total Land Area", f"{total_area:,.0f} km²")
+                    
+                with summary_col2:
+                    dominant_class = class_areas.iloc[0]
+                    st.metric("Dominant Class", 
+                             f"{dominant_class['Class_Name'][:20]} ({dominant_class['area_sqkm']:,.0f} km²)")
+                    
+                with summary_col3:
+                    diversity_index = len(class_areas) / total_area if total_area > 0 else 0
+                    st.metric("Class Diversity", f"{len(class_areas)} classes")
+                
+                # Regional distribution (by country)
+                st.subheader("🌐 Distribution by Country")
+                
+                try:
+                    # Intersect with country boundaries
+                    # Use projected data for accurate area calculation
+                    target_crs = valid_gdf_viz.crs
+                    aoi_proj = AOI.to_crs(target_crs)
+                    
+                    # Spatial join to assign land cover to countries
+                    joined = gpd.sjoin(valid_gdf_viz, aoi_proj, how='left', predicate='intersects')
+                    
+                    # Find name column
+                    name_col = None
+                    for col in ['name', 'NAME', 'Name', 'admin', 'ADMIN', 'Admin', 'country', 'COUNTRY']:
+                        if col in joined.columns:
+                            name_col = col
+                            break
+                    
+                    if name_col:
+                        # Calculate area by country and class
+                        joined['area_sqkm'] = joined.geometry.area / 1e6
+                        
+                        country_class_area = joined.groupby([name_col, class_col])['area_sqkm'].sum().reset_index()
+                        country_class_area['Code'] = country_class_area[class_col].astype(int)
+                        country_class_area['Class_Name'] = country_class_area['Code'].apply(
+                            lambda x: LCCS_NAMES.get(x, f"Class {x}")
+                        )
+                        
+                        # Pivot for visualization
+                        pivot_table = country_class_area.pivot_table(
+                            index='Class_Name', 
+                            columns=name_col, 
+                            values='area_sqkm', 
+                            aggfunc='sum'
+                        ).fillna(0)
+                        
+                        # Create stacked bar chart
+                        fig_country, ax_country = plt.subplots(figsize=(12, 8))
+                        pivot_table.plot(kind='bar', stacked=True, ax=ax_country, 
+                                       colormap='tab20', alpha=0.8)
+                        
+                        ax_country.set_title("Land Cover Distribution by Country", 
+                                           fontsize=14, fontweight='bold')
+                        ax_country.set_xlabel("Land Cover Class")
+                        ax_country.set_ylabel("Area (sq km)")
+                        ax_country.tick_params(axis='x', rotation=45)
+                        ax_country.legend(title="Country", bbox_to_anchor=(1.05, 1), loc='upper left')
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig_country)
+                        plt.close(fig_country)
+                        
+                        # Display table
+                        st.dataframe(pivot_table.style.format("{:,.0f}"))
+                        
+                except Exception as e:
+                    st.info(f"Country-level analysis not available: {e}")
+            
+            else:
+                st.info("Spatial distribution analysis requires projected coordinate system for area calculations.")
+        
+        else:
+            st.info("Please load land cover data in the 'Map Visualization' tab first.")
+    
+    with tab4:
         if 'feature_name' in locals():
             st.header(f"ℹ️ {feature_name} Metadata & Cleaning")
         else:
